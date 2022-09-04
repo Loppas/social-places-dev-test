@@ -31,11 +31,13 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Security;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class StoreController extends BaseVueController
 {
     protected ?string $entity = StoreViewModel::class;
+    private readonly array $entityProperties;
 
     public function __construct(
         private readonly SerializerInterface $serializer,
@@ -45,6 +47,7 @@ class StoreController extends BaseVueController
         protected EntityManagerInterface $entityManager,
         protected RouterInterface $router,
         private readonly StoreService $storeService,
+        private readonly ImportService $importService,
     ) {
         parent::__construct(
             $serializer,
@@ -54,42 +57,50 @@ class StoreController extends BaseVueController
             $entityManager,
             $router
         );
+
+        $this->entityProperties = $this->extractImportExportAttributeInformation();
     }
 
     #[Route('/api/stores/index', name: 'api_stores', methods: ['POST', 'GET'])]
-    public function index(Request $request): JsonResponse {
+    public function index(Request $request): JsonResponse
+    {
         return $this->_index($request);
     }
 
     /**
      * @throws \Exception
      */
-    protected function getBaseResults(Request $request): array {
+    protected function getBaseResults(Request $request): array
+    {
         return $this->_getBaseResults($request);
     }
 
     #[Route('/api/stores/filters', name: 'api_stores_filters', methods: ['POST', 'GET'])]
-    public function getFilters(): JsonResponse {
+    public function getFilters(): JsonResponse
+    {
         return $this->_getFilters();
     }
 
     #[Route('/api/filters/brands', name: 'api_brands_filter')]
-    public function getBrandsFilter(): JsonResponse {
+    public function getBrandsFilter(): JsonResponse
+    {
         $brands = $this->entityManager->query('select id, name from brand order by name');
         return $this->json($brands);
     }
 
     #[Route('/api/stores/temporary-folder', name: 'api_stores_temporary_folder', methods: 'GET')]
-    public function getTemporaryUploadFolder(): JsonResponse {
+    public function getTemporaryUploadFolder(): JsonResponse
+    {
         return $this->json(['folder' => sp_unique_string_based_on_uniqid('store')]);
     }
 
     #[Route('/api/stores/import/upload', name: 'api_stores_upload', methods: 'POST')]
-    public function storeImportFileUpload(Request $request, FileUploadService $fileUploadService): JsonResponse {
+    public function storeImportFileUpload(Request $request, FileUploadService $fileUploadService): JsonResponse
+    {
         $files = $request->files;
         $temporaryFolder = $request->headers->get('X-Folder');
         if (!$files) {
-            return $this->json([],Response::HTTP_PRECONDITION_FAILED);
+            return $this->json([], Response::HTTP_PRECONDITION_FAILED);
         }
 
         $mapFiles = static function (UploadedFile $item) use ($temporaryFolder, $fileUploadService) {
@@ -120,7 +131,8 @@ class StoreController extends BaseVueController
      * @throws NoResultException
      */
     #[Route('/api/stores/export', name: 'api_store_export', methods: 'POST')]
-    public function export(Request $request) {
+    public function export(Request $request)
+    {
         /** @var QueryBuilder $qb */
         [
             'qb' => $qb
@@ -165,7 +177,8 @@ class StoreController extends BaseVueController
         return ExportService::generateResponse($document, 'Export');
     }
 
-    private function extractImportExportAttributeInformation(): array {
+    private function extractImportExportAttributeInformation(): array
+    {
         $concernedClass = Store::class;
 
         $reflectionClass = new ReflectionClass($concernedClass);
@@ -197,7 +210,7 @@ class StoreController extends BaseVueController
             $exportProcessor = null;
             if ($getterReflectionMethod->getReturnType()?->getName() === 'bool') {
                 $exportProcessor = static function (?bool $value) {
-                    return match($value) {
+                    return match ($value) {
                         null => '',
                         false => 'No',
                         true => 'Yes',
@@ -214,16 +227,16 @@ class StoreController extends BaseVueController
             $setterReflectionMethod = new \ReflectionMethod($concernedClass, $setterFunction);
             $importProcessor = null;
             $setterParameter = $setterReflectionMethod->getParameters()[0];
-             if ($setterParameter->getType()?->getName() === 'bool') {
-                 $allowsNulls = $setterParameter->getType()?->allowsNull() ?? false;
-                 $importProcessor = static function ($mixed, ?string $value) use ($allowsNulls) {
-                     return match(strtolower($value ?? '')) {
-                         '' => $allowsNulls ? null : false,
-                         'no' => false,
-                         'yes' => true,
-                     };
-                 };
-             }
+            if ($setterParameter->getType()?->getName() === 'bool') {
+                $allowsNulls = $setterParameter->getType()?->allowsNull() ?? false;
+                $importProcessor = static function ($mixed, ?string $value) use ($allowsNulls) {
+                    return match (strtolower($value ?? '')) {
+                        '' => $allowsNulls ? null : false,
+                        'no' => false,
+                        'yes' => true,
+                    };
+                };
+            }
             if (!empty($importProcessors = $property->getAttributes(ImportProcessorAttribute::class))) {
                 /** @var ImportProcessorAttribute $importProcessor */
                 $importProcessorAttr = reset($importProcessors)->newInstance();
@@ -243,9 +256,19 @@ class StoreController extends BaseVueController
 
             $isIdentifier = $importExportAttribute->getIsIdentifierField();
 
-            $extractedProperties[] = compact('columnName', 'propertyName', 'getterFunction', 'setterFunction', 'dbColumnName', 'isIdentifier', 'exportProcessor','importProcessor');
+            $extractedProperties[] = compact('columnName', 'propertyName', 'getterFunction', 'setterFunction', 'dbColumnName', 'isIdentifier', 'exportProcessor', 'importProcessor');
         }
         return $extractedProperties;
+    }
+
+    private function mapConstraintViolationToErrorMessage(ConstraintViolation $constraintViolation): ?string
+    {
+        $contraint = $constraintViolation->getConstraint();
+
+        return null;
+        // switch ($constraint) {
+        //     case 
+        // }
     }
 
     /**
@@ -265,12 +288,48 @@ class StoreController extends BaseVueController
      * Feel free to update any supporting code to the table to help speed things up
      */
     #[Route('/api/stores/import/process', name: 'api_store_process_import', methods: 'POST')]
-    public function import(Request $request, ValidatorInterface $validator): StreamedResponse|JsonResponse {
+    public function import(Request $request, ValidatorInterface $validator): StreamedResponse|JsonResponse
+    {
         $folder = $request->get('folder');
         $fileName = $request->get('fileName');
         $filePath = FileUploadService::CONTENT_PATH . "/temp-uploads/$folder/$fileName";
 
-        // TODO: read file and process import
+        $this->importService->loadDocument($filePath);
+
+        $stylesheetErrors = [];
+        $rowList = array_slice($this->importService->toArray(), 1);
+
+        $rowCount = 1;
+
+        foreach ($rowList as $rowCount => $row) {
+            $store = new Store();
+
+            for ($i = 0; $i < count($this->entityProperties); $i++) {
+                $entityProperty = $this->entityProperties[$i];
+
+                $importProcessor = $entityProperty["importProcessor"];
+
+                if ($importProcessor) {
+                    $importProcessor($this, $row[$i]);
+                } else {
+                    $propertyName = ucfirst($entityProperty["propertyName"]);
+                    $setterFunction = "set$propertyName";
+                    $store->{$setterFunction}($row[$i]);
+                }
+            }
+
+            $constraintViolations = $validator->validate($store);
+
+            $rowErrors = [];
+
+            foreach ($constraintViolations as $violation) {
+                $error = $this->mapConstraintViolationToErrorMessage($violation);
+
+                if ($error) $stylesheetErrors[] = $error;
+            }
+
+            if ($rowErrors) $stylesheetErrors[] = "Row $rowCount:\t" . implode(", ", $rowErrors);
+        }
 
         return $this->json([]);
     }
