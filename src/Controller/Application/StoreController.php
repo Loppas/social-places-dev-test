@@ -31,13 +31,13 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Security;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Validator\Constraints;
 use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class StoreController extends BaseVueController
 {
     protected ?string $entity = StoreViewModel::class;
-    private readonly array $entityProperties;
 
     public function __construct(
         private readonly SerializerInterface $serializer,
@@ -57,8 +57,6 @@ class StoreController extends BaseVueController
             $entityManager,
             $router
         );
-
-        $this->entityProperties = $this->extractImportExportAttributeInformation();
     }
 
     #[Route('/api/stores/index', name: 'api_stores', methods: ['POST', 'GET'])]
@@ -261,16 +259,6 @@ class StoreController extends BaseVueController
         return $extractedProperties;
     }
 
-    private function mapConstraintViolationToErrorMessage(ConstraintViolation $constraintViolation): ?string
-    {
-        $contraint = $constraintViolation->getConstraint();
-
-        return null;
-        // switch ($constraint) {
-        //     case 
-        // }
-    }
-
     /**
      * Developer Test
      * Implement the import function, accepting a URL and request from the frontend
@@ -293,44 +281,53 @@ class StoreController extends BaseVueController
         $folder = $request->get('folder');
         $fileName = $request->get('fileName');
         $filePath = FileUploadService::CONTENT_PATH . "/temp-uploads/$folder/$fileName";
+        $attributeInformation = $this->extractImportExportAttributeInformation();
 
         $this->importService->loadDocument($filePath);
 
-        $stylesheetErrors = [];
-        $rowList = array_slice($this->importService->toArray(), 1);
+        /* Stores validation errors after parsing row data */
+        $tableErrors = [];
 
-        $rowCount = 1;
+        /* The number of stores that will be batched into a single flush to the database */
+        $batchSize = 100;
 
-        foreach ($rowList as $rowCount => $row) {
+        foreach (array_slice($this->importService->toArray(), 1) as $rowIndex => $row) {
             $store = new Store();
 
-            for ($i = 0; $i < count($this->entityProperties); $i++) {
-                $entityProperty = $this->entityProperties[$i];
+            /* Loop through Store meta data to find and call the correct setters on $store object */
+            for ($i = 0; $i < count($attributeInformation) && $i < count($row); $i++) {
+                $attribute = $attributeInformation[$i];
 
-                $importProcessor = $entityProperty["importProcessor"];
+                $importProcessor = $attribute["importProcessor"];
 
-                if ($importProcessor) {
-                    $importProcessor($this, $row[$i]);
-                } else {
-                    $propertyName = ucfirst($entityProperty["propertyName"]);
-                    $setterFunction = "set$propertyName";
-                    $store->{$setterFunction}($row[$i]);
+                try {
+                    if ($importProcessor) {
+                        $importProcessor($this, $row[$i]);
+                    } else {
+                        $propertyName = ucfirst($attribute["propertyName"]);
+                        $setterFunction = $attribute["setterFunction"] ?? "set$propertyName";
+
+                        $store->{$setterFunction}($row[$i]);
+                    }
+                } catch (Exception $e) {
                 }
             }
 
-            $constraintViolations = $validator->validate($store);
+            /* Run validation on store object and extract column errors into deliminated list */
+            $rowErrors = sp_extract_errors_as_string($validator->validate($store));
 
-            $rowErrors = [];
+            if ($rowErrors) $tableErrors[] = $rowErrors;
 
-            foreach ($constraintViolations as $violation) {
-                $error = $this->mapConstraintViolationToErrorMessage($violation);
+            $this->entityManager->persist($store);
 
-                if ($error) $stylesheetErrors[] = $error;
+            /* Once a batchSize of iterations has occurred, write the store objects to the database 
+            and clear entity manager's memory */
+            if ($rowIndex % $batchSize === 0) {
+                $this->entityManager->flush();
+                $this->entityManager->clear();
             }
-
-            if ($rowErrors) $stylesheetErrors[] = "Row $rowCount:\t" . implode(", ", $rowErrors);
         }
 
-        return $this->json([]);
+        return $this->json($tableErrors);
     }
 }

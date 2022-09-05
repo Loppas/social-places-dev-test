@@ -30,7 +30,7 @@ class Store
     private string $name;
 
     #[ORM\ManyToOne(Brand::class, cascade: ['persist'], fetch: 'LAZY')]
-    #[ORM\JoinColumn('brand_id','id')]
+    #[ORM\JoinColumn('brand_id', 'id')]
     #[ImportExportAttribute(getter: 'getBrandName')]
     #[ImportProcessorAttribute('discoverBrandByName', 'storeService')]
     private Brand $brand;
@@ -48,7 +48,6 @@ class Store
     #[ImportExportAttribute('API ID', isIdentifierField: true)]
     #[Assert\NotBlank]
     private ?string $apiId;
-
 
     #[ORM\Column(type: 'boolean', nullable: false, options: ['default' => false])]
     #[ImportExportAttribute]
@@ -143,222 +142,279 @@ class Store
     #[ImportExportAttribute]
     private ?float $longitude;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->status = StoreStatus::OPEN;
     }
 
-    public function getName(): string {
+    public function getName(): string
+    {
         return $this->name;
     }
 
-    public function setName(string $name): void {
+    public function setName(string $name): void
+    {
         $this->name = $name;
     }
 
-    public function getBrand(): Brand {
+    public function getBrand(): Brand
+    {
         return $this->brand;
     }
 
-    public function setBrand(Brand $brand): void {
+    public function setBrand(Brand $brand): void
+    {
         $this->brand = $brand;
     }
 
-    public function getBrandName(): string {
+    public function getBrandName(): string
+    {
         return $this->brand->getName();
     }
 
-    public function getIndustry(): ?string {
+    public function getIndustry(): ?string
+    {
         return $this->industry;
     }
 
-    public function setIndustry(?string $industry): void {
+    public function setIndustry(?string $industry): void
+    {
         $this->industry = $industry;
     }
 
-    public function getStatus(): StoreStatus {
+    public function getStatus(): StoreStatus
+    {
         return $this->status;
     }
 
-    public function setStatus(StoreStatus $status): void {
+    public function setStatus(StoreStatus $status): void
+    {
         $this->status = $status;
     }
 
-    public function getStatusName(): string {
+    public function getStatusName(): string
+    {
         return $this->status->getName();
     }
 
-    public function setStatusFromName(string $statusName): void {
-        $this->status = StoreStatus::fromName($statusName);
+    public function setStatusFromName(string $statusName): void
+    {
+        try {
+            $this->status = StoreStatus::fromName($statusName);
+        } catch (\Exception $e) {
+        }
     }
 
-    public function getApiId(): string {
+    public function getApiId(): string
+    {
         return $this->apiId;
     }
 
-    public function setApiId(?string $apiId): void {
+    public function setApiId(?string $apiId): void
+    {
         $this->apiId = $apiId;
     }
 
-    public function getFacebookVerified(): bool {
+    public function getFacebookVerified(): bool
+    {
         return $this->facebookVerified;
     }
 
-    public function setFacebookVerified(bool $facebookVerified): void {
+    public function setFacebookVerified(bool $facebookVerified): void
+    {
         $this->facebookVerified = $facebookVerified;
     }
 
-    public function getFacebookId(): ?string {
+    public function getFacebookId(): ?string
+    {
         return $this->facebookId;
     }
 
-    public function setFacebookId(?string $facebookId): void {
+    public function setFacebookId(?string $facebookId): void
+    {
         $this->facebookId = $facebookId;
     }
 
-    public function getFacebookPageName(): ?string {
+    public function getFacebookPageName(): ?string
+    {
         return $this->facebookPageName;
     }
 
-    public function setFacebookPageName(?string $facebookPageName): void {
+    public function setFacebookPageName(?string $facebookPageName): void
+    {
         $this->facebookPageName = $facebookPageName;
     }
 
-    public function getFacebookUrl(): ?string {
+    public function getFacebookUrl(): ?string
+    {
         return $this->facebookUrl;
     }
 
-    public function setFacebookUrl(?string $facebookUrl): void {
+    public function setFacebookUrl(?string $facebookUrl): void
+    {
         $this->facebookUrl = $facebookUrl;
     }
 
-    public function getGoogleVerified(): bool {
+    public function getGoogleVerified(): bool
+    {
         return $this->googleVerified;
     }
 
-    public function setGoogleVerified(bool $googleVerified): void {
+    public function setGoogleVerified(bool $googleVerified): void
+    {
         $this->googleVerified = $googleVerified;
     }
 
-    public function getGooglePlaceId(): ?string {
+    public function getGooglePlaceId(): ?string
+    {
         return $this->googlePlaceId;
     }
 
-    public function setGooglePlaceId(?string $googlePlaceId): void {
+    public function setGooglePlaceId(?string $googlePlaceId): void
+    {
         $this->googlePlaceId = $googlePlaceId;
     }
 
-    public function getGoogleLocationId(): ?string {
+    public function getGoogleLocationId(): ?string
+    {
         return $this->googleLocationId;
     }
 
-    public function setGoogleLocationId(?string $googleLocationId): void {
+    public function setGoogleLocationId(?string $googleLocationId): void
+    {
         $this->googleLocationId = $googleLocationId;
     }
 
-    public function getGoogleMapsUrl(): ?string {
+    public function getGoogleMapsUrl(): ?string
+    {
         return $this->googleMapsUrl;
     }
 
-    public function setGoogleMapsUrl(?string $googleMapsUrl): void {
+    public function setGoogleMapsUrl(?string $googleMapsUrl): void
+    {
         $this->googleMapsUrl = $googleMapsUrl;
     }
 
-    public function getTripAdvisorVerified(): bool {
+    public function getTripAdvisorVerified(): bool
+    {
         return $this->tripAdvisorVerified;
     }
 
-    public function setTripAdvisorVerified(bool $tripAdvisorVerified): void {
+    public function setTripAdvisorVerified(bool $tripAdvisorVerified): void
+    {
         $this->tripAdvisorVerified = $tripAdvisorVerified;
     }
 
-    public function getTripAdvisorId(): ?string {
+    public function getTripAdvisorId(): ?string
+    {
         return $this->tripAdvisorId;
     }
 
-    public function setTripAdvisorId(?string $tripAdvisorId): void {
+    public function setTripAdvisorId(?string $tripAdvisorId): void
+    {
         $this->tripAdvisorId = $tripAdvisorId;
     }
 
-    public function getTripAdvisorPartnerPropertyId(): ?string {
+    public function getTripAdvisorPartnerPropertyId(): ?string
+    {
         return $this->tripAdvisorPartnerPropertyId;
     }
 
-    public function setTripAdvisorPartnerPropertyId(?string $tripAdvisorPartnerPropertyId): void {
+    public function setTripAdvisorPartnerPropertyId(?string $tripAdvisorPartnerPropertyId): void
+    {
         $this->tripAdvisorPartnerPropertyId = $tripAdvisorPartnerPropertyId;
     }
 
-    public function getTripAdvisorUrl(): ?string {
+    public function getTripAdvisorUrl(): ?string
+    {
         return $this->tripAdvisorUrl;
     }
 
-    public function setTripAdvisorUrl(?string $tripAdvisorUrl): void {
+    public function setTripAdvisorUrl(?string $tripAdvisorUrl): void
+    {
         $this->tripAdvisorUrl = $tripAdvisorUrl;
     }
 
-    public function getZomatoVerified(): bool {
+    public function getZomatoVerified(): bool
+    {
         return $this->zomatoVerified;
     }
 
-    public function setZomatoVerified(bool $zomatoVerified): void {
+    public function setZomatoVerified(bool $zomatoVerified): void
+    {
         $this->zomatoVerified = $zomatoVerified;
     }
 
-    public function getZomatoId(): ?string {
+    public function getZomatoId(): ?string
+    {
         return $this->zomatoId;
     }
 
-    public function setZomatoId(?string $zomatoId): void {
+    public function setZomatoId(?string $zomatoId): void
+    {
         $this->zomatoId = $zomatoId;
     }
 
-    public function getZomatoUrl(): ?string {
+    public function getZomatoUrl(): ?string
+    {
         return $this->zomatoUrl;
     }
 
-    public function setZomatoUrl(?string $zomatoUrl): void {
+    public function setZomatoUrl(?string $zomatoUrl): void
+    {
         $this->zomatoUrl = $zomatoUrl;
     }
 
-    public function getInstagramVerified(): bool {
+    public function getInstagramVerified(): bool
+    {
         return $this->instagramVerified;
     }
 
-    public function setInstagramVerified(bool $instagramVerified): void {
+    public function setInstagramVerified(bool $instagramVerified): void
+    {
         $this->instagramVerified = $instagramVerified;
     }
 
-    public function getInstagramId(): ?string {
+    public function getInstagramId(): ?string
+    {
         return $this->instagramId;
     }
 
-    public function setInstagramId(?string $instagramId): void {
+    public function setInstagramId(?string $instagramId): void
+    {
         $this->instagramId = $instagramId;
     }
 
-    public function getInstagramUrl(): ?string {
+    public function getInstagramUrl(): ?string
+    {
         return $this->instagramUrl;
     }
 
-    public function setInstagramUrl(?string $instagramUrl): void {
+    public function setInstagramUrl(?string $instagramUrl): void
+    {
         $this->instagramUrl = $instagramUrl;
     }
 
-    public function getLatitude(): ?float {
+    public function getLatitude(): ?float
+    {
         return $this->latitude;
     }
 
-    public function setLatitude(mixed $latitude): void {
+    public function setLatitude(mixed $latitude): void
+    {
         if (is_string($latitude)) {
             $latitude = (float)$latitude;
         }
         $this->latitude = $latitude;
     }
 
-    public function getLongitude(): ?float {
+    public function getLongitude(): ?float
+    {
         return $this->longitude;
     }
 
-    public function setLongitude(mixed $longitude): void {
+    public function setLongitude(mixed $longitude): void
+    {
         if (is_string($longitude)) {
             $longitude = (float)$longitude;
         }
