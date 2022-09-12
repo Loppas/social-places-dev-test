@@ -20,7 +20,8 @@ class ImportService
     /**
      * @throws \PhpOffice\PhpSpreadsheet\Reader\Exception
      */
-    public function loadDocument(string $path): self {
+    public function loadDocument(string $path): self
+    {
         $this->originalPath = $path;
         $this->downloadedPath = $path;
         if (filter_var($path, FILTER_VALIDATE_URL)) {
@@ -41,20 +42,31 @@ class ImportService
         return $this;
     }
 
-    public function iterateSheets(): \Generator {
+    public function unsetDocument()
+    {
+        $this->document->disconnectWorksheets();
+        $this->document = null;
+        unset($this->document);
+        gc_collect_cycles();
+    }
+
+    public function iterateSheets(): \Generator
+    {
         foreach ($this->document->getWorksheetIterator() as $worksheet) {
             yield $worksheet;
         }
     }
 
-    public function getSheetNames(): array {
+    public function getSheetNames(): array
+    {
         return $this->document->getSheetNames();
     }
 
     /**
      * @throws \PhpOffice\PhpSpreadsheet\Exception
      */
-    public function getRow(int $rowToRead, int $activeIndex = null, bool $trim = true): array {
+    public function getRow(int $rowToRead, int $activeIndex = null, bool $trim = true): array
+    {
         $this->validateDocument();
         $worksheet = $this->document->setActiveSheetIndex($this->getActiveIndex($activeIndex));
         $highestColumn = $worksheet->getHighestColumn();
@@ -80,12 +92,12 @@ class ImportService
         $sheetRows = $worksheet->toArray(null, true, true);
         if ($trim) {
             foreach ($sheetRows as &$sheetRow) {
-                $sheetRow = array_map(static fn($value) => is_string($value) ? trim($value) : $value, $sheetRow);
+                $sheetRow = array_map(static fn ($value) => is_string($value) ? trim($value) : $value, $sheetRow);
             }
             unset($sheetRow);
         }
         if ($stripBlank) {
-            $sheetRows = array_filter($sheetRows, static fn($item) => count(array_filter($item)) > 0);
+            $sheetRows = array_filter($sheetRows, static fn ($item) => count(array_filter($item)) > 0);
         }
         if ($headers === true) {
             $rows = [];
@@ -112,9 +124,9 @@ class ImportService
         $worksheet = $this->document->setActiveSheetIndex($this->getActiveIndex($activeIndex));
         $iterator = $worksheet->getRowIterator($headerRow);
         $headerRowValues = [];
-        $getRow = static fn(RowCellIterator $row) => array_map(static fn(Cell $cell) => $cell->getValue(), iterator_to_array($row));
-        $trimRow = static fn(array $row) => array_map(static fn($value) => is_string($value) ? trim($value) : $value, $row);
-        $stripRow = static fn(array $row) => array_filter($row, static fn($item) => count(array_filter($item)) > 0);
+        $getRow = static fn (RowCellIterator $row) => array_map(static fn (Cell $cell) => $cell->getValue(), iterator_to_array($row));
+        $trimRow = static fn (array $row) => array_map(static fn ($value) => is_string($value) ? trim($value) : $value, $row);
+        $stripRow = static fn (array $row) => array_filter($row, static fn ($item) => count(array_filter($item)) > 0);
         foreach ($iterator as $item) {
             $row = $getRow($item->getCellIterator());
             if ($trimBlank) {
@@ -165,29 +177,34 @@ class ImportService
     /**
      * @throws \RuntimeException
      */
-    private function validateDocument(): void {
+    private function validateDocument(): void
+    {
         if (!$this->document) {
             throw new \RuntimeException("No document");
         }
     }
 
 
-    public function getActiveIndex(int $activeIndex = null): ?int {
+    public function getActiveIndex(int $activeIndex = null): ?int
+    {
         if ($activeIndex === null) {
             $activeIndex = $this->activeIndex === 0 ? $this->activeIndex : $this->activeIndex - 1;
         }
         return $activeIndex;
     }
 
-    public function getDocument(): Spreadsheet {
+    public function getDocument(): Spreadsheet
+    {
         return $this->document;
     }
 
-    public function getOriginalPath(): ?string {
+    public function getOriginalPath(): ?string
+    {
         return $this->originalPath;
     }
 
-    public function getDownloadedPath(): ?string {
+    public function getDownloadedPath(): ?string
+    {
         return $this->downloadedPath;
     }
 }

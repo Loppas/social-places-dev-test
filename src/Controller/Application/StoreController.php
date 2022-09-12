@@ -229,9 +229,9 @@ class StoreController extends BaseVueController
                 $allowsNulls = $setterParameter->getType()?->allowsNull() ?? false;
                 $importProcessor = static function ($mixed, ?string $value) use ($allowsNulls) {
                     return match (strtolower($value ?? '')) {
-                        '' => $allowsNulls ? null : false,
                         'no' => false,
                         'yes' => true,
+                        default => $allowsNulls ? null : false
                     };
                 };
             }
@@ -260,24 +260,44 @@ class StoreController extends BaseVueController
     }
 
     /**
-     * Developer Test
-     * Implement the import function, accepting a URL and request from the frontend
-     * Process the import in a timely manner using the tools available to you
-     * @see ImportService
-     * @see StoreController::extractImportExportAttributeInformation
-     * or creating new tools
-     *
-     * Conditions:
-     * Imports 20000 excel rows by 26 columns swiftly
-     * Validates data notifying the user of all errors for each row in a simple easy to understand way
-     * Validation should use default entity validation (already existing - in part)
-     * Compromise on one field that may not ever change to be the identifier, noting the name may change in the provided export
-     *
-     * Feel free to update any supporting code to the table to help speed things up
+     * Imports a list of stores from an excel sheet
+     * * **Notes:**
+     * 1. The function imports data from multiple worksheets
+     * 1. It is assumed that the each worksheet's columns are in the same order as the store properties
+     * 2. No data will be written to the database if an error is encountered during the import
+     * 3. The import will only process up to the number of properties that store has (25) and ignore any columns past that point
+     * * **Column Properties:**
+     * 1. name 
+     * 2. brand
+     * 3. industry
+     * 4. status
+     * 5. apiId
+     * 6. facebookVerified
+     * 7. facebookId
+     * 8. facebookPageName
+     * 9. facebookUrl
+     * 10. googleVerified
+     * 11. googlePlaceId
+     * 12. googleLocationId
+     * 13. googleMapsUrl
+     * 14. tripAdvisorVerified
+     * 15. tripAdvisorId
+     * 16. tripAdvisorPartnerPropertyId
+     * 17. tripAdvisorUrl
+     * 18. zomatoVerified 
+     * 19. zomatoId
+     * 20. zomatoUrl
+     * 21. instagramVerified
+     * 22. instagramId
+     * 23. instagramUrl
+     * 24. latitude
+     * 25. longitude
      */
     #[Route('/api/stores/import/process', name: 'api_store_process_import', methods: 'POST')]
     public function import(Request $request, ValidatorInterface $validator): StreamedResponse|JsonResponse
     {
+        /*TODO: Fix docker memory leak where data isn't cleared after each run */
+
         $folder = $request->get('folder');
         $fileName = $request->get('fileName');
         $filePath = FileUploadService::CONTENT_PATH . "/temp-uploads/$folder/$fileName";
@@ -285,48 +305,64 @@ class StoreController extends BaseVueController
 
         $this->importService->loadDocument($filePath);
 
-        /* Stores validation errors after parsing row data */
-        $tableErrors = [];
-
         /* The number of stores that will be batched into a single flush to the database */
         $batchSize = 100;
 
-        foreach (array_slice($this->importService->toArray(), 1) as $rowIndex => $row) {
-            $store = new Store();
+        foreach ($this->importService->iterateSheets() as $sheetIndex => $sheet) {
+            $tableErrors = [];
 
-            /* Loop through Store meta data to find and call the correct setters on $store object */
-            for ($i = 0; $i < count($attributeInformation) && $i < count($row); $i++) {
-                $attribute = $attributeInformation[$i];
+            $storeList = [];
 
-                $importProcessor = $attribute["importProcessor"];
+            foreach ($this->importService->toIterator((int) $sheetIndex) as $row) {
+                $store = new Store();
+                $rowKeys = array_keys((array) $row);
 
-                try {
-                    if ($importProcessor) {
-                        $importProcessor($this, $row[$i]);
-                    } else {
-                        $propertyName = ucfirst($attribute["propertyName"]);
-                        $setterFunction = $attribute["setterFunction"] ?? "set$propertyName";
+                /* Loop through Store meta data to find and call the correct setters on $store object */
+                foreach ($attributeInformation as $attributeIndex => $attribute) {
+                    if (!isset($rowKeys[$attributeIndex])) continue;
 
-                        $store->{$setterFunction}($row[$i]);
-                    }
-                } catch (Exception $e) {
+                    $data = $row[$rowKeys[$attributeIndex]];
+
+                    $importProcessor = $attribute["importProcessor"];
+
+                    if ($importProcessor) $data = $importProcessor($this, $data);
+
+                    $propertyName = ucfirst($attribute["propertyName"]);
+                    $setterFunction = $attribute["setterFunction"] ?? "set$propertyName";
+
+                    $store->{$setterFunction}($data);
                 }
+
+                /* Run validation on store object and extract column errors into deliminated list */
+                $rowErrors = sp_extract_errors_as_string($validator->validate($store));
+
+                if ($rowErrors) $tableErrors[] = $rowErrors;
+                else if (!$tableErrors) $storeList[] = $store;
             }
 
-            /* Run validation on store object and extract column errors into deliminated list */
-            $rowErrors = sp_extract_errors_as_string($validator->validate($store));
+            /* Only perform database updates and insertions if there were no table errors encountered 
+                while parsing the imported store data */
+            if (!$tableErrors) {
+                foreach ($storeList as $storeIndex => $store) {
+                    $store->setDateCreated(new \DateTime);
+                    $this->entityManager->persist($store);
 
-            if ($rowErrors) $tableErrors[] = $rowErrors;
+                    /* After a batchSize number of interations, write the pending entity changes to the database and clear entity manager's memory of those
+                    objects */
+                    if (($storeIndex + 1) % $batchSize === 0) {
+                        $this->entityManager->flush();
+                        $this->entityManager->clear();
+                    }
+                }
 
-            $this->entityManager->persist($store);
-
-            /* Once a batchSize of iterations has occurred, write the store objects to the database 
-            and clear entity manager's memory */
-            if ($rowIndex % $batchSize === 0) {
+                /* Write any remaning store objects in the current batch and clear entity manager */
                 $this->entityManager->flush();
                 $this->entityManager->clear();
             }
         }
+
+        /* Clear spreadsheet data from memory */
+        $this->importService->unsetDocument();
 
         return $this->json($tableErrors);
     }
